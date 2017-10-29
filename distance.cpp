@@ -1,208 +1,124 @@
 #include <vtkVersion.h>
 #include <vtkSmartPointer.h>
  
-#include <vtkActor.h>
-#include <vtkDistancePolyDataFilter.h>
-#include <vtkPolyDataMapper.h>
-#include <vtkRenderer.h>
-#include <vtkRenderWindow.h>
 #include <vtkRenderWindowInteractor.h>
-#include <vtkPLYReader.h>
-#include <vtkCleanPolyData.h>
+#include <vtkRenderWindow.h>
+#include <vtkRenderer.h>
+#include <vtkActor.h>
+#include <vtkCamera.h>
+#include <vtkDataSetMapper.h>
+#include <vtkPolyData.h>
+#include <vtkActor.h>
 #include <vtkProperty.h>
-#include <vtkPointData.h>
-#include <vtkScalarBarActor.h>
-#include <vtkSphereSource.h>
-#include <vtkBooleanOperationPolyDataFilter.h>
-
-float standard_deviation(vtkSmartPointer<vtkDistancePolyDataFilter> dist);
-float test;
-float finalTestGIT;
-
-//Help!
-//Test comment and a new bit
-
-std::string testFilename;
+#include <vtkClipClosedSurface.h>
+#include <vtkPlane.h>
+#include <vtkPlaneCollection.h>
+#include <vtkXMLPolyDataReader.h>
  
-int main(int argc, char* argv[])
+#include <vtkSphereSource.h>
+ 
+//
+// Demonstrate the use of clipping of polygonal data
+//
+ 
+int main (int argc, char *argv[])
 {
-  vtkSmartPointer<vtkPolyData> input1;
-  vtkSmartPointer<vtkPolyData> input2;
-  if (argc == 3)
+  // PolyData to process
+  vtkSmartPointer<vtkPolyData> polyData;
+ 
+  if (argc > 1)
     {
-//     std::cerr << "Usage: " << argv[0]
-//               << " filename1.ply"
-//               << " filename2.ply" << std::endl;
-		testFilename = argv[1];
-
-vtkSmartPointer<vtkPLYReader> reader1 = vtkSmartPointer<vtkPLYReader>::New();
-	reader1->SetFileName(argv[1]);
-	reader1->Update();
-	input1 = reader1->GetOutput();	
-
-vtkSmartPointer<vtkPLYReader> reader2 = vtkSmartPointer<vtkPLYReader>::New();
-	reader2->SetFileName(argv[2]);
-	reader2->Update();
-	input2 = reader2->GetOutput();		
-	
-    
+    vtkSmartPointer<vtkXMLPolyDataReader> reader = 
+      vtkSmartPointer<vtkXMLPolyDataReader>::New();
+    reader->SetFileName(argv[1]);
+    reader->Update();
+    polyData = reader->GetOutput();
     }
   else
     {
-    vtkSmartPointer<vtkSphereSource> sphereSource1 =
+    // Create a sphere
+    vtkSmartPointer<vtkSphereSource> sphereSource = 
       vtkSmartPointer<vtkSphereSource>::New();
-    sphereSource1->SetCenter(1, 0, 0);
-    sphereSource1->Update();
-    input1 = sphereSource1->GetOutput();
+    sphereSource->SetThetaResolution(20);
+    sphereSource->SetPhiResolution(11);
+    sphereSource->Update();
  
-    vtkSmartPointer<vtkSphereSource> sphereSource2 =
-      vtkSmartPointer<vtkSphereSource>::New();
-    sphereSource2->Update();
-    input2 = sphereSource2->GetOutput();
+    polyData = sphereSource->GetOutput();
     }
  
-  vtkSmartPointer<vtkCleanPolyData> clean1 =
-    vtkSmartPointer<vtkCleanPolyData>::New();
+  double *center = polyData->GetCenter();
+  vtkSmartPointer<vtkPlane> plane1 =
+    vtkSmartPointer<vtkPlane>::New();
+  plane1->SetOrigin(center[0], center[1], center[2]);
+  plane1->SetNormal(0.0, -1.0, 0.0);
+  vtkSmartPointer<vtkPlane> plane2 =
+    vtkSmartPointer<vtkPlane>::New();
+  plane2->SetOrigin(center[0], center[1], center[2]);
+  plane2->SetNormal(0.0, 0.0, 1.0);
+  vtkSmartPointer<vtkPlane> plane3 =
+    vtkSmartPointer<vtkPlane>::New();
+  plane3->SetOrigin(center[0], center[1], center[2]);
+  plane3->SetNormal(-1.0, 0.0, 0.0);
+ 
+  vtkSmartPointer<vtkPlaneCollection> planes =
+    vtkSmartPointer<vtkPlaneCollection>::New();
+  planes->AddItem(plane1);
+  planes->AddItem(plane2);
+  planes->AddItem(plane3);
+ 
+  vtkSmartPointer<vtkClipClosedSurface> clipper =
+    vtkSmartPointer<vtkClipClosedSurface>::New();
 #if VTK_MAJOR_VERSION <= 5
-  clean1->SetInputConnection( input1->GetProducerPort());
+  clipper->SetInput(polyData);
 #else
-  clean1->SetInputData( input1);
+  clipper->SetInputData(polyData);
 #endif
+  clipper->SetClippingPlanes(planes);
+  clipper->SetActivePlaneId(2);
+  clipper->SetScalarModeToColors();
+  clipper->SetClipColor(0.8900, 0.8100, 0.3400); // banana
+  clipper->SetBaseColor(1.0000, 0.3882, 0.2784); // tomato
+  clipper->SetActivePlaneColor(0.6400, 0.5800, 0.5000); // beige
  
-  vtkSmartPointer<vtkCleanPolyData> clean2 =
-    vtkSmartPointer<vtkCleanPolyData>::New();
-#if VTK_MAJOR_VERSION <= 5
-  clean2->SetInputConnection( input2->GetProducerPort());
-#else
-  clean2->SetInputData( input2);
-#endif
+  vtkSmartPointer<vtkDataSetMapper> clipMapper =
+    vtkSmartPointer<vtkDataSetMapper>::New();
+  clipMapper->SetInputConnection(clipper->GetOutputPort());
  
-  vtkSmartPointer<vtkDistancePolyDataFilter> distanceFilter =
-    vtkSmartPointer<vtkDistancePolyDataFilter>::New();
- 
-  distanceFilter->SetInputConnection( 0, clean1->GetOutputPort() );
-  distanceFilter->SetInputConnection( 1, clean2->GetOutputPort() );
-  distanceFilter->Update();
-/*
-  // Boolean
-  vtkSmartPointer<vtkBooleanOperationPolyDataFilter> booleanOp = vtkSmartPointer<vtkBooleanOperationPolyDataFilter>::New();
-  booleanOp->SetOperationToIntersection();
-  booleanOp->SetInputConnection(0, clean1->GetOutputPort());
-  booleanOp->SetInputConnection(1, clean2->GetOutputPort());
-
-  vtkSmartPointer<vtkPolyDataMapper> bmapper = vtkSmartPointer<vtkPolyDataMapper>::New();
-  bmapper->SetInputConnection(booleanOp->GetOutputPort());
-  bmapper->ScalarVisibilityOff();
-  vtkSmartPointer<vtkActor> bactor =vtkSmartPointer<vtkActor>::New();
-  bactor->SetMapper(bmapper);
-*/
-
-  float sd = standard_deviation(distanceFilter);
- 
-  vtkSmartPointer<vtkPolyDataMapper> mapper =
-    vtkSmartPointer<vtkPolyDataMapper>::New();
-  mapper->SetInputConnection( distanceFilter->GetOutputPort() );
-  mapper->SetScalarRange(distanceFilter->GetOutput()->GetPointData()->GetScalars()->GetRange()[0],
-   distanceFilter->GetOutput()->GetPointData()->GetScalars()->GetRange()[1]);
- 
-  vtkSmartPointer<vtkActor> actor =
+  vtkSmartPointer<vtkActor> clipActor =
     vtkSmartPointer<vtkActor>::New();
-  actor->SetMapper( mapper );
+  clipActor->SetMapper(clipMapper);
+  clipActor->GetProperty()->SetColor(1.0000,0.3882,0.2784);
+  clipActor->GetProperty()->SetInterpolationToFlat();
  
-  vtkSmartPointer<vtkScalarBarActor> scalarBar = 
-    vtkSmartPointer<vtkScalarBarActor>::New();
-  scalarBar->SetLookupTable(mapper->GetLookupTable());
-  scalarBar->SetTitle("Distance");
-  scalarBar->SetNumberOfLabels(4);
-  vtkSmartPointer<vtkRenderer> renderer =
+  // Create graphics stuff
+  //
+  vtkSmartPointer<vtkRenderer> ren1 =
     vtkSmartPointer<vtkRenderer>::New();
+  ren1->SetBackground(.3, .4, .6);
  
   vtkSmartPointer<vtkRenderWindow> renWin =
     vtkSmartPointer<vtkRenderWindow>::New();
-  renWin->AddRenderer( renderer );
+  renWin->AddRenderer(ren1);
+  renWin->SetSize(512,512);
  
-  vtkSmartPointer<vtkRenderWindowInteractor> renWinInteractor =
+  vtkSmartPointer<vtkRenderWindowInteractor> iren =
     vtkSmartPointer<vtkRenderWindowInteractor>::New();
-  renWinInteractor->SetRenderWindow( renWin );
+  iren->SetRenderWindow(renWin);
  
-  renderer->AddActor( actor );
- // renderer->AddActor(bactor);
-  renderer->AddActor2D(scalarBar);
+  // Add the actors to the renderer, set the background and size
+  //
+  ren1->AddActor(clipActor);
  
-  //renWin->Render();
-  //renWinInteractor->Start();
+  // Generate an interesting view
+  //
+  ren1->ResetCamera();
+  ren1->GetActiveCamera()->Azimuth(120);
+  ren1->GetActiveCamera()->Elevation(30);
+  ren1->GetActiveCamera()->Dolly(1.0);
+  ren1->ResetCameraClippingRange();
+ 
+  iren->Initialize();
+  iren->Start();
  
   return EXIT_SUCCESS;
-}
-
-float standard_deviation(vtkSmartPointer<vtkDistancePolyDataFilter> dist)
-{
-	double meanNeg = 0.0, sum_deviationNeg = 0.0;
-	double meanPos = 0.0, sum_deviationPos = 0.0;
-	double mean = 0.0, sum_deviation = 0.0;
-	double unsigned_mean = 0.0, unsigned_sum_dev = 0.0;
-	vtkIdType nValues;
-	int meanNegctr = 0, meanPosctr = 0;
-	nValues = dist->GetOutput()->GetPointData()->GetScalars()->GetSize();
-
-	for (vtkIdType i = 0; i<nValues; ++i)
-	{
-		double val = dist->GetOutput()->GetPointData()->GetScalars()->GetTuple1(i);
-		mean += val;
-		if (val < 0) {	meanNeg += val; meanNegctr++;}
-		if (val >= 0) { meanPos += val; meanPosctr++; }
-		unsigned_mean += fabs(dist->GetOutput()->GetPointData()->GetScalars()->GetTuple1(i));
-	}
-
-	cout << "MeanNeg : " << meanNeg << endl;
-	cout << "Neg count : " << meanNegctr << endl;
-
-	mean = mean / (double)nValues;
-	meanNeg = meanNeg / (double)meanNegctr;
-	meanPos = meanPos / (double)meanPosctr;
-	unsigned_mean = unsigned_mean / (double)nValues;
-
-	double negCtr = 0; double posCtr = 0;
-
-	for (vtkIdType i = 0; i < nValues; ++i) {
-		sum_deviation += (dist->GetOutput()->GetPointData()->GetScalars()->GetTuple1(i) - mean)*(dist->GetOutput()->GetPointData()->GetScalars()->GetTuple1(i) - mean);
-		if (dist->GetOutput()->GetPointData()->GetScalars()->GetTuple1(i) < 0) {
-			sum_deviationNeg += (dist->GetOutput()->GetPointData()->GetScalars()->GetTuple1(i) - meanNeg)*(dist->GetOutput()->GetPointData()->GetScalars()->GetTuple1(i) - meanNeg);
-			negCtr++;
-		}
-		else {
-			sum_deviationPos += (dist->GetOutput()->GetPointData()->GetScalars()->GetTuple1(i) - meanPos)*(dist->GetOutput()->GetPointData()->GetScalars()->GetTuple1(i) - meanPos);
-			posCtr++;
-		}
-	}
-		
-	sum_deviation = sqrt(sum_deviation / (double)nValues);
-	sum_deviationNeg = sqrt(sum_deviationNeg / negCtr);
-	sum_deviationPos = sqrt(sum_deviationPos / posCtr);
-
-	ofstream out("DataResults.txt", ios::app);
-	out << testFilename;
-	out << " Mean " << mean;
-	out << " UMean " << unsigned_mean;
-	out << " Mean_Neg " << meanNeg;
-	out << " Mean_Pos " << meanPos;
-	out << " SD " << sum_deviation;
-	out << " SDpos " << sum_deviationPos;
-	out << " SDneg " << sum_deviationNeg;
-	out << " Range " << dist->GetOutput()->GetPointData()->GetScalars()->GetRange()[0] << "  " << dist->GetOutput()->GetPointData()->GetScalars()->GetRange()[1] << std::endl;
-
-	out.close();
-
-
-	std::cout << "Mean " << mean;
-	std::cout << " UMean " << unsigned_mean;
-	std::cout << " Mean_Neg " << meanNeg;
-	std::cout << " Mean_Pos " << meanPos;
-	std::cout << " SD " << sum_deviation;
-	std::cout << " SDpos " << sum_deviationPos;
-	std::cout << " SDneg " << sum_deviationNeg;
-	std::cout << " Range " << dist->GetOutput()->GetPointData()->GetScalars()->GetRange()[0] << "  " << dist->GetOutput()->GetPointData()->GetScalars()->GetRange()[1] << std::endl;
-
-
-	return sum_deviation;
 }
