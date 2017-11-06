@@ -14,7 +14,8 @@
 #include <vtkPlane.h>
 #include <vtkPlaneCollection.h>
 #include <vtkXMLPolyDataReader.h>
-#include <vtkSTLReader.h>
+#include <vtkPLYReader.h>
+#include <vtkPLYWriter.h>
  
 #include <vtkSphereSource.h>
 
@@ -24,11 +25,19 @@
 #include <vtkClipPolyData.h>
 #include <vtkPolyDataMapper.h>
 
+#include <vtkCleanPolyData.h>
+#include <vtkTriangleFilter.h>
+#include <vtkMassProperties.h>
+
 // PolyData to process
 vtkSmartPointer<vtkPolyData> ClippedpolyData =vtkSmartPointer<vtkPolyData>::New();
 vtkSmartPointer<vtkPolyData> polyData = vtkSmartPointer<vtkPolyData>::New();
 vtkSmartPointer<vtkPolyData> originalpolyData = vtkSmartPointer<vtkPolyData>::New();
 
+void loadPlanesVec(std::vector<vtkSmartPointer<vtkPlane>>& vPlanes, std::string f_name);
+void savePlanesVec(std::vector<vtkSmartPointer<vtkPlane>>& vPlanes, std::string f_name);
+void measureVolume(vtkSmartPointer<vtkPolyData> poly);
+void saveSTL(vtkSmartPointer<vtkPolyData> poly, std::string fname);
  
 //
 // Demonstrate the use of clipping of polygonal data and use of implicitplanewidget2
@@ -103,6 +112,38 @@ public:
 				polyData->Modified();
 
 			}
+			else if (key == "1") {
+
+				// Write the vector of planes to a file
+				std::string fname;
+				std::cout << "Enter filename to write planes to : ";
+				std::cin >> fname;
+				savePlanesVec(vPlanes_, fname);
+
+			}
+			else if (key == "2") {
+
+				// Read the vector of planes to a file
+				std::string fname;
+				std::cout << "Enter filename to read planes from : ";
+				std::cin >> fname;
+				loadPlanesVec(vPlanes_, fname);
+
+			}
+			else if (key == "v") {
+
+				measureVolume(polyData);
+
+			}
+			else if (key == "3") {
+
+				// Save the STL
+				std::string fname;
+				std::cout << "Enter filename to save PLY (without the '.ply' extension) : ";
+				std::cin >> fname;
+				saveSTL(polyData, fname);
+
+			}
 			
 		}
 		else {
@@ -129,8 +170,8 @@ int main (int argc, char *argv[])
 	//vtkSmartPointer<vtkPolyData> polyData;
   if (argc > 1)
     {
-    vtkSmartPointer<vtkSTLReader> reader = 
-      vtkSmartPointer<vtkSTLReader>::New();
+    vtkSmartPointer<vtkPLYReader> reader = 
+      vtkSmartPointer<vtkPLYReader>::New();
     reader->SetFileName(argv[1]);
     reader->Update();
     polyData->DeepCopy(reader->GetOutput());
@@ -138,7 +179,12 @@ int main (int argc, char *argv[])
     }
   else
     {
-    // Create a sphere
+
+	  cout << "Takes one PLY file" << endl;
+	  cout << "s - add slice, f - create filled block, 1 - save slicing planes, 2 - load slicing planes, 3 - Save the STL" << endl;
+	  cout << "v - measure volume" << endl;
+
+	  // Create a sphere
     vtkSmartPointer<vtkSphereSource> sphereSource = 
       vtkSmartPointer<vtkSphereSource>::New();
     sphereSource->SetThetaResolution(20);
@@ -150,11 +196,9 @@ int main (int argc, char *argv[])
 
 
   // Setup a visualization pipeline
-  vtkSmartPointer<vtkPlane> plane =
-	  vtkSmartPointer<vtkPlane>::New();
+  vtkSmartPointer<vtkPlane> plane = vtkSmartPointer<vtkPlane>::New();
   vtkSmartPointer<vtkClipPolyData> clipper2 = vtkSmartPointer<vtkClipPolyData>::New();
-
-  
+ 
   clipper2->SetClipFunction(plane);
   clipper2->InsideOutOn();
   clipper2->SetInputData(polyData);
@@ -218,109 +262,103 @@ int main (int argc, char *argv[])
   // Begin mouse interaction
   renderWindowInteractor->Start();
   
- /*
-  double *center = polyData->GetCenter();
-  vtkSmartPointer<vtkPlane> plane1 =
-    vtkSmartPointer<vtkPlane>::New();
-  plane1->SetOrigin(center[0], center[1], center[2]);
-  plane1->SetNormal(0.0, -1.0, 0.0);
-  vtkSmartPointer<vtkPlane> plane2 =
-    vtkSmartPointer<vtkPlane>::New();
-  plane2->SetOrigin(center[0], center[1], center[2]);
-  plane2->SetNormal(0.0, 0.0, 1.0);
-  vtkSmartPointer<vtkPlane> plane3 =
-    vtkSmartPointer<vtkPlane>::New();
-  plane3->SetOrigin(center[0], center[1], center[2]);
-  plane3->SetNormal(-1.0, 0.0, 0.0);
-
-  // Cecilies custom planes
-  //6.9893404x - 1.925634y + 0.21222094z - 91.87394653458 = 0
-  //PP0; 45.1051; 94.6566; -193.699
-  plane1->SetOrigin(45.1051, 94.6566, -193.699);
-  plane1->SetNormal(-6.9893404, 1.925634, -0.21222094);
-  // - 0.3512672x + 5.8355029y - 0.17647366z - 581.38209281627 = 0
-  //PP0; 48.675; 96.6949; -193.891
-  plane2->SetOrigin(48.675, 96.6949, -193.891);
-  plane2->SetNormal(-0.3512672, 5.8355029,  -0.17647366);
-  // 7.9424392x + 3.4904806y - 0.26454562z - 797.61333832214 = 0
-  // PP0; 52.3309; 94.6747; -194.742
-  plane3->SetOrigin(52.3309, 94.6747, -194.742);
-  plane3->SetNormal(-7.9424392, -3.4904806, 0.26454562);
-  // 4.4600957x - 2.2531021y - 0.15174307z - 57.01920096349 = 0
-  // PP0; 51.0764; 88.9237; -194.854
-  vtkSmartPointer<vtkPlane> plane4 =
-	  vtkSmartPointer<vtkPlane>::New();
-  plane4->SetOrigin(51.0764, 88.9237, -194.854);
-  plane4->SetNormal(-4.4600957,  2.2531021,  0.15174307);
-  // 3.113502x + 6.23406y + 0.2050836z - 654.811598694 = 0
-  // PP0; 45.9838; 88.4242; -193.096
-  vtkSmartPointer<vtkPlane> plane5 =
-	  vtkSmartPointer<vtkPlane>::New();
-  plane5->SetOrigin(45.9838, 88.4242, -193.096);
-  plane5->SetNormal(3.113502, 6.23406, 0.2050836);
-
- 
-  vtkSmartPointer<vtkPlaneCollection> planes =
-    vtkSmartPointer<vtkPlaneCollection>::New();
-  planes->AddItem(plane1);
-  planes->AddItem(plane2);
-  planes->AddItem(plane3);
-  planes->AddItem(plane4);
-  planes->AddItem(plane5);
- 
-  vtkSmartPointer<vtkClipClosedSurface> clipper =
-    vtkSmartPointer<vtkClipClosedSurface>::New();
-#if VTK_MAJOR_VERSION <= 5
-  clipper->SetInput(polyData);
-#else
-  clipper->SetInputData(polyData);
-#endif
-  clipper->SetClippingPlanes(planes);
-  clipper->SetActivePlaneId(2);
-  clipper->SetScalarModeToColors();
-  clipper->SetClipColor(0.8900, 0.8100, 0.3400); // banana
-  clipper->SetBaseColor(1.0000, 0.3882, 0.2784); // tomato
-  clipper->SetActivePlaneColor(0.6400, 0.5800, 0.5000); // beige
- 
-  vtkSmartPointer<vtkDataSetMapper> clipMapper =
-    vtkSmartPointer<vtkDataSetMapper>::New();
-  clipMapper->SetInputConnection(clipper->GetOutputPort());
- 
-  vtkSmartPointer<vtkActor> clipActor =
-    vtkSmartPointer<vtkActor>::New();
-  clipActor->SetMapper(clipMapper);
-  clipActor->GetProperty()->SetColor(1.0000,0.3882,0.2784);
-  clipActor->GetProperty()->SetInterpolationToFlat();
- 
-  // Create graphics stuff
-  //
-  vtkSmartPointer<vtkRenderer> ren1 =
-    vtkSmartPointer<vtkRenderer>::New();
-  ren1->SetBackground(.3, .4, .6);
- 
-  vtkSmartPointer<vtkRenderWindow> renWin =
-    vtkSmartPointer<vtkRenderWindow>::New();
-  renWin->AddRenderer(ren1);
-  renWin->SetSize(512,512);
- 
-  vtkSmartPointer<vtkRenderWindowInteractor> iren =
-    vtkSmartPointer<vtkRenderWindowInteractor>::New();
-  iren->SetRenderWindow(renWin);
- 
-  // Add the actors to the renderer, set the background and size
-  //
-  ren1->AddActor(clipActor);
- 
-  // Generate an interesting view
-  //
-  ren1->ResetCamera();
-  ren1->GetActiveCamera()->Azimuth(120);
-  ren1->GetActiveCamera()->Elevation(30);
-  ren1->GetActiveCamera()->Dolly(1.0);
-  ren1->ResetCameraClippingRange();
- 
-  iren->Initialize();
-  iren->Start();
- */
   return EXIT_SUCCESS;
+}
+
+void savePlanesVec(std::vector<vtkSmartPointer<vtkPlane>>& vPlanes, std::string f_name) {
+
+	ofstream myFile(f_name+".pln", ios::binary);
+
+	if (myFile.is_open()) {
+		int n = vPlanes.size();
+		myFile.write(reinterpret_cast<const char *>(&n), sizeof(n));
+
+		for (int i = 0; i < n; i++) {
+			double norm[3];
+			double orig[3];
+			vPlanes[i]->GetNormal(norm);
+			vPlanes[i]->GetOrigin(orig);
+			myFile.write(reinterpret_cast<const char *>(&orig), sizeof(orig));
+			myFile.write(reinterpret_cast<const char *>(&norm), sizeof(norm));
+		}
+	}
+	myFile.close();
+
+	cout << "File saved..." << endl;
+
+	for (int i = 0; i < vPlanes.size(); i++) {
+		double norm[3];
+		double orig[3];
+		vPlanes[i]->GetNormal(norm);
+		vPlanes[i]->GetOrigin(orig);
+		cout << "Origin : " << orig[0] << "," << orig[1] << "," << orig[2] << endl;
+		cout << "Normal : " << norm[0] << "," << norm[1] << "," << norm[2] << endl;
+	}
+
+}
+
+
+void loadPlanesVec(std::vector<vtkSmartPointer<vtkPlane>>& vPlanes, std::string f_name) {
+
+	vPlanes.clear();
+	ifstream myFile(f_name+".pln", ios::binary);
+
+	if (myFile.is_open()) {
+		int n=0;
+		myFile.read(reinterpret_cast<char *>(&n), sizeof(n));
+
+		for (int i = 0; i < n; i++) {
+			double norm[3];
+			double orig[3];
+			myFile.read(reinterpret_cast<char *>(&orig), sizeof(orig));
+			myFile.read(reinterpret_cast<char *>(&norm), sizeof(norm));
+			vtkSmartPointer<vtkPlane> plane = vtkSmartPointer<vtkPlane>::New();
+			plane->SetOrigin(orig);
+			plane->SetNormal(norm);
+			vPlanes.push_back(plane);
+		}
+
+	}
+	myFile.close();
+
+	cout << "File loaded..." << endl;
+
+	for (int i = 0; i < vPlanes.size(); i++) {
+		double norm[3];
+		double orig[3];
+		vPlanes[i]->GetNormal(norm);
+		vPlanes[i]->GetOrigin(orig);
+		cout << "Origin : " << orig[0] << "," << orig[1] << "," << orig[2] << endl;
+		cout << "Normal : " << norm[0] << "," << norm[1] << "," << norm[2] << endl;
+	}
+}
+
+void measureVolume(vtkSmartPointer<vtkPolyData> poly) {
+
+	vtkSmartPointer<vtkCleanPolyData> cleanPolyData = vtkSmartPointer<vtkCleanPolyData>::New();
+	cleanPolyData->SetInputData(poly);
+	cleanPolyData->Update();
+
+	vtkSmartPointer<vtkTriangleFilter> triangleFilter = vtkSmartPointer<vtkTriangleFilter>::New();
+	triangleFilter->SetInputConnection(cleanPolyData->GetOutputPort());
+	triangleFilter->Update();
+
+	vtkSmartPointer<vtkMassProperties> mass = vtkSmartPointer<vtkMassProperties>::New();
+	mass->SetInputConnection(triangleFilter->GetOutputPort());
+	mass->Update();
+
+	double volume = mass->GetVolume();
+	cout << "Mesh volume : " << volume << endl;
+
+}
+
+void saveSTL(vtkSmartPointer<vtkPolyData> poly, std::string fname)
+{
+	// Save
+	vtkSmartPointer<vtkPLYWriter> writer = vtkSmartPointer<vtkPLYWriter>::New();
+	writer->SetInputData(poly);
+	writer->SetFileTypeToBinary();
+	std::string STLfname = fname + ".ply";
+	writer->SetFileName(STLfname.c_str());
+	writer->Write();
 }
