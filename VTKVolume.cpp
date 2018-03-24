@@ -85,6 +85,29 @@ public:
 				vPlanes_.push_back(currentPlane);
 
 			}
+			else if (key == "c") {
+
+				// Create a sliced model (no volume) from the plane collection
+				polyData->DeepCopy(originalpolyData);
+				
+				//clipper->InsideOutOn();
+				
+				for (int i = 0; i < vPlanes_.size(); i++) {
+
+					vtkSmartPointer<vtkClipPolyData> clipper = vtkSmartPointer<vtkClipPolyData>::New();
+					clipper->SetInputData(polyData);
+
+					clipper->SetClipFunction(vPlanes_[i]);
+					clipper->Update();
+					ClippedpolyData->DeepCopy(clipper->GetOutput());
+					polyData->DeepCopy(ClippedpolyData);
+					polyData->Modified();
+
+				}
+			
+				
+			}
+
 			else if (key == "f") {
 
 				// Create the volume polydata
@@ -168,7 +191,71 @@ public:
 int main (int argc, char *argv[])
 {
 	//vtkSmartPointer<vtkPolyData> polyData;
-  if (argc > 1)
+
+	if (argc == 5) // .exe file_input plane_crop action output 
+	{
+		// Batch script run
+
+		// Load the mesh
+		vtkSmartPointer<vtkPLYReader> reader = vtkSmartPointer<vtkPLYReader>::New();
+		reader->SetFileName(argv[1]);
+		reader->Update();
+		polyData->DeepCopy(reader->GetOutput());
+		originalpolyData->DeepCopy(reader->GetOutput());
+
+		// Load the planes file
+		std::vector<vtkSmartPointer<vtkPlane>> vPlanes;
+		std::string planes_file = argv[2];
+		planes_file += ".pln";
+		loadPlanesVec(vPlanes, planes_file);
+
+		// Do the cut/fill
+		if (argv[3] != "fill") // Any text other than 'fill' will induce a cut
+		{
+			for (int i = 0; i < vPlanes.size(); i++) {
+
+				vtkSmartPointer<vtkClipPolyData> clipper = vtkSmartPointer<vtkClipPolyData>::New();
+				clipper->SetInputData(polyData);
+				clipper->SetClipFunction(vPlanes[i]);
+				clipper->Update();
+				polyData->DeepCopy(clipper->GetOutput());
+				polyData->Modified();
+
+			}
+		}
+		else //fill
+		{
+			// Create the volume polydata
+			vtkSmartPointer<vtkPlaneCollection> planes = vtkSmartPointer<vtkPlaneCollection>::New();
+			for (int i = 0; i<vPlanes.size(); i++)
+				planes->AddItem(vPlanes[i]);
+
+
+			vtkSmartPointer<vtkClipClosedSurface> clipper = vtkSmartPointer<vtkClipClosedSurface>::New();
+			clipper->SetInputData(originalpolyData);
+			clipper->SetClippingPlanes(planes);
+			clipper->SetActivePlaneId(2);
+			clipper->SetScalarModeToColors();
+			clipper->SetClipColor(0.8900, 0.8100, 0.3400); // banana
+			clipper->SetBaseColor(1.0000, 0.3882, 0.2784); // tomato
+			clipper->SetActivePlaneColor(0.6400, 0.5800, 0.5000); // beige
+			clipper->Update();
+
+			polyData->DeepCopy(clipper->GetOutput());
+			polyData->Modified();
+
+		}
+
+		// Save the resulting file 
+		std::string save_name = argv[4];
+		saveSTL(polyData, save_name); // NOTE! This actually saves PLYs at the moment (including tacking on the .ply)!
+
+		// Quit
+		return 1;
+
+	}
+
+  else if (argc > 1)
     {
     vtkSmartPointer<vtkPLYReader> reader = 
       vtkSmartPointer<vtkPLYReader>::New();
@@ -182,7 +269,8 @@ int main (int argc, char *argv[])
 
 	  cout << "Takes one PLY file" << endl;
 	  cout << "s - add slice, f - create filled block, 1 - save slicing planes, 2 - load slicing planes, 3 - Save the STL" << endl;
-	  cout << "v - measure volume" << endl;
+	  cout << "v - measure volume, c - clip with a loaded set of planes but no volume filling" << endl;
+	  cout << "or '.exe file_input plane_crop action(fill/cut) output'" << endl;
 
 	  // Create a sphere
     vtkSmartPointer<vtkSphereSource> sphereSource = 
