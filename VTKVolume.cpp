@@ -77,8 +77,8 @@ public:
 				double norm[3];
 				double orig[3];
 				Plane->GetNormal(norm);
-				for (int i = 0; i < 3; i++)
-					norm[i] *= -1.;
+				//for (int i = 0; i < 3; i++)
+					//norm[i] *= -1.;
 				Plane->GetOrigin(orig);
 				currentPlane->SetNormal(norm);
 				currentPlane->SetOrigin(orig);
@@ -206,8 +206,9 @@ int main (int argc, char *argv[])
 		// Load the planes file
 		std::vector<vtkSmartPointer<vtkPlane>> vPlanes;
 		std::string planes_file = argv[2];
-		planes_file += ".pln";
 		loadPlanesVec(vPlanes, planes_file);
+
+		cout << vPlanes.size();
 
 		// Do the cut/fill
 		if (argv[3] != "fill") // Any text other than 'fill' will induce a cut
@@ -218,7 +219,9 @@ int main (int argc, char *argv[])
 				clipper->SetInputData(polyData);
 				clipper->SetClipFunction(vPlanes[i]);
 				clipper->Update();
-				polyData->DeepCopy(clipper->GetOutput());
+				clipper->Modified();
+				originalpolyData->DeepCopy(clipper->GetOutput());
+				polyData->DeepCopy(originalpolyData);
 				polyData->Modified();
 
 			}
@@ -241,7 +244,8 @@ int main (int argc, char *argv[])
 			clipper->SetActivePlaneColor(0.6400, 0.5800, 0.5000); // beige
 			clipper->Update();
 
-			polyData->DeepCopy(clipper->GetOutput());
+			originalpolyData->DeepCopy(clipper->GetOutput());
+			polyData->DeepCopy(originalpolyData);
 			polyData->Modified();
 
 		}
@@ -288,7 +292,7 @@ int main (int argc, char *argv[])
   vtkSmartPointer<vtkClipPolyData> clipper2 = vtkSmartPointer<vtkClipPolyData>::New();
  
   clipper2->SetClipFunction(plane);
-  clipper2->InsideOutOn();
+  //clipper2->InsideOutOn();
   clipper2->SetInputData(polyData);
 
 
@@ -342,7 +346,6 @@ int main (int argc, char *argv[])
   renderWindowInteractor->AddObserver(vtkCommand::KeyPressEvent, myCallback);
 
   // Render
-
   renderWindowInteractor->Initialize();
   renderWindow->Render();
   planeWidget->On();
